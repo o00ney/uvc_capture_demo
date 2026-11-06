@@ -12,4 +12,4 @@ Less is more. The simplest solution is the best solution. The action hierarchy f
 
 ## 脚本
 
-- **同步与提交**：依次执行 `./script/sync_to_jetson.sh`、`git commit` 和 `git push`，仅提交本次任务相关文件，任一步失败即停止并报告。脚本通过 `ssh jetson` 将项目同步至 `~/Desktop/uvc_capture_demo/`，同步新增、修改和删除，遵循 Git 忽略规则，保留远端被忽略的文件及 `.git`；可用 `--dry-run` 预览。脚本依赖 Git、rsync 和本地 Python 3；同步成功不代表已在设备上编译或运行验证。
+- **同步与提交**：依次执行 `./script/sync_to_jetson.sh`、`git commit` 和 `git push`，仅提交本次任务相关文件，任一步失败即停止并报告。脚本通过 `ssh jetson` 将项目同步至 `~/Desktop/uvc_capture_demo/`，同步新增、修改和删除，遵循 Git 忽略规则，保留远端被忽略的文件及 `.git`；可用 `--dry-run` 预览。

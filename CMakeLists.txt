@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 project(uvc_capture_demo LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
@@ -27,4 +27,11 @@ if(BUILD_TESTING)
     add_executable(test_decoder tests/test_decoder.cpp)
     target_link_libraries(test_decoder PRIVATE camera_core)
     add_test(NAME jpeg_decoder COMMAND test_decoder)
+
+    add_test(NAME camera_cli COMMAND ${CMAKE_COMMAND}
+        "-DCAMERA_DEMO=$<TARGET_FILE:camera_demo>"
+        "-DFIXTURE_GENERATOR=$<TARGET_FILE:test_decoder>"
+        "-DTEST_DIR=${CMAKE_CURRENT_BINARY_DIR}/cli-test"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_cli.cmake")
+    set_tests_properties(latest_frame_slot jpeg_decoder camera_cli PROPERTIES TIMEOUT 30)
 endif()

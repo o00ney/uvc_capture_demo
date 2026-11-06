@@ -3,15 +3,20 @@
 #include "v4l2_camera.hpp"
 
 #include <atomic>
+#include <charconv>
 #include <chrono>
 #include <csignal>
+#include <cstdlib>
 #include <exception>
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <limits>
 #include <stdexcept>
 #include <string>
+#include <system_error>
 #include <thread>
+#include <utility>
 
 using namespace camera_demo;
 
@@ -37,6 +42,16 @@ void usage() {
                  "--frames 0 runs until Ctrl+C. The JPEG file mode replays one image at the chosen fps.\n";
 }
 
+std::uint64_t parse_unsigned(const std::string& value, std::uint64_t maximum,
+                             const std::string& option) {
+    std::uint64_t number = 0;
+    const auto* end = value.data() + value.size();
+    const auto result = std::from_chars(value.data(), end, number);
+    if (result.ec != std::errc{} || result.ptr != end || number > maximum)
+        throw std::invalid_argument("invalid value for " + option + ": " + value);
+    return number;
+}
+
 Options parse_options(int argc, char** argv) {
     Options options;
     for (int i = 1; i < argc; ++i) {
@@ -47,16 +62,17 @@ Options parse_options(int argc, char** argv) {
         if (key == "--device") options.device = value;
         else if (key == "--jpeg-file") options.jpeg_file = value;
         else if (key == "--save-ppm") options.save_ppm = value;
-        else if (key == "--frames") options.frames = std::stoull(value);
-        else if (key == "--width") options.width = std::stoi(value);
-        else if (key == "--height") options.height = std::stoi(value);
-        else if (key == "--fps") options.fps = std::stoi(value);
+        else if (key == "--frames") options.frames = parse_unsigned(value, std::numeric_limits<std::uint64_t>::max(), key);
+        else if (key == "--width") options.width = static_cast<int>(parse_unsigned(value, std::numeric_limits<int>::max(), key));
+        else if (key == "--height") options.height = static_cast<int>(parse_unsigned(value, std::numeric_limits<int>::max(), key));
+        else if (key == "--fps") options.fps = static_cast<int>(parse_unsigned(value, 1'000'000'000, key));
         else throw std::invalid_argument("unknown option " + key);
     }
     if (options.device.empty() == options.jpeg_file.empty())
         throw std::invalid_argument("provide exactly one of --device or --jpeg-file");
-    if (options.width <= 0 || options.height <= 0 || options.fps <= 0)
-        throw std::invalid_argument("width, height and fps must be positive");
+    if (options.width == 0) throw std::invalid_argument("--width must be positive");
+    if (options.height == 0) throw std::invalid_argument("--height must be positive");
+    if (options.fps == 0) throw std::invalid_argument("--fps must be positive");
     return options;
 }
 
@@ -73,9 +89,49 @@ void save_ppm(const std::string& path, const RgbImage& rgb) {
     if (!output) throw std::runtime_error("cannot create PPM file: " + path);
     output << "P6\n" << rgb.width << ' ' << rgb.height << "\n255\n";
     for (int row = 0; row < rgb.height; ++row)
-        output.write(reinterpret_cast<const char*>(rgb.pixels.data() + row * rgb.stride),
+        output.write(reinterpret_cast<const char*>(rgb.pixels.data() +
+                         static_cast<std::size_t>(row) * static_cast<std::size_t>(rgb.stride)),
                      static_cast<std::streamsize>(rgb.width * 3));
     if (!output) throw std::runtime_error("failed writing PPM file: " + path);
+}
+
+struct WorkerResult {
+    std::uint64_t decoded = 0;
+    std::uint64_t decode_errors = 0;
+    std::exception_ptr error;
+};
+
+// Only the worker writes result; the main thread reads it after join().
+// The decoder and reused RGB buffer belong to this thread, outside the slot lock.
+void run_worker(const Options& options, LatestFrameSlot& slot,
+                std::atomic<bool>& worker_failed, WorkerResult& result) {
+    try {
+        JpegDecoder decoder(options.width, options.height);
+        RgbImage rgb;
+        bool saved = false;
+        while (auto frame = slot.take()) {
+            try { decoder.decode(frame->bytes, rgb); }
+            catch (const std::exception& error) {
+                ++result.decode_errors;
+                if (result.decode_errors <= 3) std::cerr << "decode: " << error.what() << '\n';
+                continue;
+            }
+            // Replace this block with a synchronous algorithm call.
+            // The algorithm must not keep rgb.pixels.data() after return.
+            if (!saved && !options.save_ppm.empty()) {
+                save_ppm(options.save_ppm, rgb);
+                saved = true;
+            }
+            const auto processed = ++result.decoded;
+            if (processed % 60 == 0)
+                std::cout << "decoded=" << processed << " latest_sequence="
+                          << frame->sequence << '\n';
+        }
+    } catch (...) {
+        result.error = std::current_exception();
+        worker_failed = true;
+        slot.close();
+    }
 }
 
 std::uint64_t replay_file(const Options& options, LatestFrameSlot& slot,
@@ -103,41 +159,9 @@ int main(int argc, char** argv) {
         std::signal(SIGTERM, on_signal);
         LatestFrameSlot slot;
         std::atomic<bool> worker_failed{false};
-        std::atomic<std::uint64_t> decoded{0};
-        std::atomic<std::uint64_t> decode_errors{0};
-        std::exception_ptr worker_error;
+        WorkerResult result;
 
-        // This thread owns the decoder and RGB buffer. Its mutex is held only
-        // inside slot.take(), never during JPEG decoding or user processing.
-        std::thread worker([&] {
-            try {
-                JpegDecoder decoder(options.width, options.height);
-                RgbImage rgb;
-                bool saved = false;
-                while (auto frame = slot.take()) {
-                    try { decoder.decode(frame->bytes, rgb); }
-                    catch (const std::exception& error) {
-                        ++decode_errors;
-                        if (decode_errors <= 3) std::cerr << "decode: " << error.what() << '\n';
-                        continue;
-                    }
-                    // Replace this block with a synchronous algorithm call.
-                    // The algorithm must not keep rgb.pixels.data() after return.
-                    if (!saved && !options.save_ppm.empty()) {
-                        save_ppm(options.save_ppm, rgb);
-                        saved = true;
-                    }
-                    const auto processed = ++decoded;
-                    if (processed % 60 == 0)
-                        std::cout << "decoded=" << processed << " latest_sequence="
-                                  << frame->sequence << '\n';
-                }
-            } catch (...) {
-                worker_error = std::current_exception();
-                worker_failed = true;
-                slot.close();
-            }
-        });
+        std::thread worker([&] { run_worker(options, slot, worker_failed, result); });
 
         std::uint64_t received = 0;
         std::exception_ptr producer_error;
@@ -158,13 +182,13 @@ int main(int argc, char** argv) {
         worker.join();
         const auto seconds = std::chrono::duration<double>(
             std::chrono::steady_clock::now() - started).count();
-        std::cout << "received=" << received << " decoded=" << decoded
+        std::cout << "received=" << received << " decoded=" << result.decoded
                   << " overwritten_before_decode=" << slot.overwritten()
-                  << " decode_errors=" << decode_errors
+                  << " decode_errors=" << result.decode_errors
                   << " elapsed_seconds=" << seconds << '\n';
         if (producer_error) std::rethrow_exception(producer_error);
-        if (worker_error) std::rethrow_exception(worker_error);
-        if (decoded == 0) throw std::runtime_error("no frame decoded successfully");
+        if (result.error) std::rethrow_exception(result.error);
+        if (result.decoded == 0) throw std::runtime_error("no frame decoded successfully");
         return 0;
     } catch (const std::exception& error) {
         std::cerr << "error: " << error.what() << '\n';

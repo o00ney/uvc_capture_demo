@@ -30,4 +30,18 @@ int main() {
     require(waiting.wait_for(std::chrono::seconds(1)) == std::future_status::ready,
             "close wakes consumer");
     require(!waiting.get().has_value(), "closed slot returns no frame");
+    slot.close();
+    slot.publish(JpegFrame{{9}, 12, {}});
+    require(!slot.take(), "publish after close is ignored");
+    require(slot.overwritten() == 1, "publish after close does not count overwrites");
+
+    LatestFrameSlot draining;
+    draining.publish(JpegFrame{{7}, 13, {}});
+    draining.close();
+    draining.close();
+    draining.publish(JpegFrame{{8}, 14, {}});
+    auto last = draining.take();
+    require(last && last->sequence == 13, "close preserves the last pending frame");
+    require(!draining.take(), "closed slot is empty after draining");
+    require(draining.overwritten() == 0, "closed publish does not overwrite pending frame");
 }

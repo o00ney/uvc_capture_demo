@@ -1,6 +1,6 @@
 # Jetson USB 摄像头采集与 MJPEG → RGB 示例
 
-这是一个 **C++17、Linux V4L2 + mmap、libjpeg-turbo** 的最小示例。目标是从 UVC 摄像头取 1280×720 MJPEG 帧，把尚未处理的旧帧丢弃，并将选中的帧解码为 RGB。当前没有算法；`src/main.cpp` 中标出的代码块是以后接算法的位置。
+这是一个 **C++20、Linux V4L2 + mmap、libjpeg-turbo** 的最小示例。目标是从 UVC 摄像头取 1280×720 MJPEG 帧，把尚未处理的旧帧丢弃，并将选中的帧解码为 RGB。当前没有算法；`src/main.cpp` 中标出的代码块是以后接算法的位置。
 
 ## 在 Jetson 上构建
 
@@ -25,6 +25,8 @@ ctest --test-dir build --output-on-failure
 ```bash
 ./build/camera_demo --device /dev/videoX --frames 600 --save-ppm first.ppm
 ```
+
+数字参数只接受完整的非负十进制整数；宽高必须为正且不超过 `INT_MAX`，fps 范围为 `1～1,000,000,000`，frames 允许为 0。RGB 尺寸还必须满足 stride 和存储大小限制；这些是输入边界，并不表示设备支持如此大的尺寸或帧率。
 
 程序请求 60 fps，并打印摄像头返回的实际帧率。`first.ppm` 是第一张成功解码的 RGB 图像，可用支持 PPM 的图片查看器检查颜色。`--frames 0` 会持续运行，按 Ctrl+C 停止。
 
@@ -70,4 +72,4 @@ frame->sequence    // 摄像头帧序号；可看出跳过的帧
 
 ## 当前边界
 
-此示例要求设备接受 **单平面 Video Capture、mmap、MJPEG、指定宽高**。`VIDIOC_S_PARM` 请求 60 fps，但设备可能协商到其他帧率；程序会打印实际值。摄像头断开或流出错时程序报错退出，尚未实现自动重连。构建和解码已在 macOS 上验证；V4L2 设备取流需要在 Jetson 上验证。
+此示例要求设备接受 **单平面 Video Capture、mmap、MJPEG、指定宽高**。`VIDIOC_S_PARM` 请求 60 fps，但设备可能协商到其他帧率；程序会打印实际值。摄像头断开或流出错时程序报错退出，尚未实现自动重连。本次重构未编译、未运行测试；C++20 工具链兼容性、文件回放与 V4L2 实机取流均待后续在 Jetson 上验证。
