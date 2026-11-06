@@ -10,8 +10,6 @@ Less is more. The simplest solution is the best solution. The action hierarchy f
 - **并发与错误处理**：明确共享数据的同步方式和线程退出机制，避免数据竞争、死锁和持锁执行耗时操作。检查系统调用与外部库错误，提供必要上下文，不静默吞错，不以 `assert` 替代运行时检查。
 - **性能与修改范围**：先保证正确性，再依据测量优化；减少逐帧路径中不必要的分配、复制与日志，明确队列容量和丢帧策略。保持修改范围最小，优先复用或删除代码，避免无关重构。
 
-## 提交与设备同步
+## 脚本
 
-- 提交并推送项目改动时，依次执行 `./script/sync_to_jetson.sh`、`git commit` 和 `git push`；任一步失败即停止，并报告实际完成的步骤。
-- 同步通过 SSH 别名 `jetson` 将本地项目上传至 `~/Desktop/uvc_capture_demo/`，遵循 Git 忽略规则，不上传 `.git`，不删除远端文件；可使用 `--dry-run` 预览。
-- 仅提交本次任务相关文件；同步成功不代表已在 Jetson 上编译或运行验证。
+- **同步与提交**：依次执行 `./script/sync_to_jetson.sh`、`git commit` 和 `git push`，仅提交本次任务相关文件，任一步失败即停止并报告。脚本通过 `ssh jetson` 将项目同步至 `~/Desktop/uvc_capture_demo/`，同步新增、修改和删除，遵循 Git 忽略规则，保留远端被忽略的文件及 `.git`；可用 `--dry-run` 预览。脚本依赖 Git、rsync 和本地 Python 3；同步成功不代表已在设备上编译或运行验证。
