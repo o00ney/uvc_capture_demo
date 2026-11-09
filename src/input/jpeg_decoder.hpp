@@ -1,10 +1,10 @@
 #pragma once
 
-#include "frame.hpp"
+#include "common/frame.hpp"
 
 #include <turbojpeg.h>
 
-namespace camera_demo {
+namespace image_pipeline {
 
 // One decoder per worker thread. decode() reuses the caller's RGB storage.
 class JpegDecoder {
@@ -22,4 +22,4 @@ private:
     int expected_height_;
 };
 
-} // namespace camera_demo
+} // namespace image_pipeline

@@ -1,4 +1,4 @@
-#include "jpeg_decoder.hpp"
+#include "input/jpeg_decoder.hpp"
 
 #include <turbojpeg.h>
 
@@ -10,7 +10,7 @@
 #include <utility>
 #include <vector>
 
-using namespace camera_demo;
+using namespace image_pipeline;
 
 static void require(bool condition, const char* message) {
     if (!condition) throw std::runtime_error(message);

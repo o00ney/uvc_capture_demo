@@ -1,17 +1,17 @@
-# Run only through CTest after building camera_demo and test_decoder.
+# Run only through CTest after building image_pipeline and test_decoder.
 file(MAKE_DIRECTORY "${TEST_DIR}")
 set(missing "${TEST_DIR}/missing.jpg")
 file(REMOVE "${missing}")
 
 function(check_cli expected_status expected_text)
-    execute_process(COMMAND "${CAMERA_DEMO}" ${ARGN}
+    execute_process(COMMAND "${PIPELINE}" ${ARGN}
         RESULT_VARIABLE status OUTPUT_VARIABLE stdout ERROR_VARIABLE stderr TIMEOUT 5)
     if(NOT "${status}" STREQUAL "${expected_status}")
-        message(FATAL_ERROR "camera_demo ${ARGN}: expected ${expected_status}, got ${status}\n${stdout}${stderr}")
+        message(FATAL_ERROR "image_pipeline ${ARGN}: expected ${expected_status}, got ${status}\n${stdout}${stderr}")
     endif()
     string(FIND "${stdout}${stderr}" "${expected_text}" found)
     if(found EQUAL -1)
-        message(FATAL_ERROR "camera_demo ${ARGN}: missing '${expected_text}'\n${stdout}${stderr}")
+        message(FATAL_ERROR "image_pipeline ${ARGN}: missing '${expected_text}'\n${stdout}${stderr}")
     endif()
 endfunction()
 
@@ -20,7 +20,7 @@ foreach(value IN ITEMS -1 12junk 18446744073709551616)
     check_cli(1 "invalid value for --frames" --jpeg-file "${missing}" --frames "${value}")
 endforeach()
 # Explicit empty arguments must be preserved rather than dropped by list expansion.
-execute_process(COMMAND "${CAMERA_DEMO}" --jpeg-file "${missing}" --frames ""
+execute_process(COMMAND "${PIPELINE}" --jpeg-file "${missing}" --frames ""
     RESULT_VARIABLE status ERROR_VARIABLE stderr TIMEOUT 5)
 if(NOT "${status}" STREQUAL "1" OR NOT stderr MATCHES "invalid value for --frames")
     message(FATAL_ERROR "empty --frames was not rejected: ${status}: ${stderr}")
@@ -53,3 +53,16 @@ endif()
 # Use a file as a parent component: this path cannot be created on any platform.
 check_cli(1 "cannot create PPM file:" --jpeg-file "${fixture}" --width 4 --height 4
     --frames 0 --fps 100 --save-ppm "${fixture}/first.ppm")
+
+foreach(value IN ITEMS bogus CPU)
+    check_cli(1 "invalid value for --process" --jpeg-file "${fixture}" --process "${value}")
+endforeach()
+check_cli(1 "--preview cpu requires" --jpeg-file "${fixture}" --preview cpu)
+check_cli(1 "--preview cuda requires" --jpeg-file "${fixture}" --process cpu --preview cuda)
+foreach(option IN ITEMS --port --cpu-threads)
+    foreach(value IN ITEMS 0 -1 9999999999999 12junk)
+        check_cli(1 "${option}" --jpeg-file "${fixture}" "${option}" "${value}")
+    endforeach()
+endforeach()
+check_cli(0 "cpu processed=" --jpeg-file "${fixture}" --width 4 --height 4
+    --frames 3 --fps 30 --process cpu --cpu-threads 1)

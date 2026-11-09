@@ -1,10 +1,10 @@
-#include "jpeg_decoder.hpp"
+#include "input/jpeg_decoder.hpp"
 
 #include <limits>
 #include <stdexcept>
 #include <string>
 
-namespace camera_demo {
+namespace image_pipeline {
 
 JpegDecoder::JpegDecoder(int expected_width, int expected_height)
     : expected_width_(expected_width), expected_height_(expected_height) {
@@ -44,4 +44,4 @@ void JpegDecoder::decode(const std::vector<std::uint8_t>& jpeg, RgbImage& output
         throw std::runtime_error(std::string("JPEG decode failed: ") + tjGetErrorStr2(handle_));
 }
 
-} // namespace camera_demo
+} // namespace image_pipeline

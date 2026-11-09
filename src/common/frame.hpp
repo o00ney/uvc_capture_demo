@@ -3,8 +3,9 @@
 #include <chrono>
 #include <cstdint>
 #include <vector>
+#include <memory>
 
-namespace camera_demo {
+namespace image_pipeline {
 
 // Owns a copy of one compressed camera frame. It remains valid after V4L2 QBUF.
 struct JpegFrame {
@@ -21,4 +22,11 @@ struct RgbImage {
     int stride = 0;
 };
 
-} // namespace camera_demo
+struct Frame {
+    RgbImage image;
+    std::uint64_t sequence = 0;
+    std::chrono::steady_clock::time_point received_at{};
+};
+using FramePtr = std::shared_ptr<const Frame>;
+
+} // namespace image_pipeline
