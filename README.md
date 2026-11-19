@@ -2,7 +2,6 @@
 
 项目在 Jetson ARM CPU 和 CUDA 上处理同一份未处理原图，并提供可选的 SSH 视频预览。摄像头采集是输入模块；文件回放可脱离摄像头使用。仓库目录仍为 `uvc_capture_demo`，主程序改为 `image_pipeline`。
 
-**当前状态：源码与静态审阅阶段，按要求未编译、未运行测试、未验证实机视频流或测量性能。** 以下命令供后续验证使用，不表示已执行成功。
 
 ## 数据流与结构
 
@@ -102,8 +101,3 @@ ssh -N -L 8080:127.0.0.1:8080 jetson
 
 `bench.sh` 同步并构建 `image_benchmark`，不给 JPEG 时用 GStreamer 生成720p测试图（不如真实画面有代表性）。结果连同 `meta.txt`（commit、功耗模式、是否锁频、参数）、`tegrastats.log` 和输出图拉回本地 `build/bench/<时间戳>/`。未锁频时会警告；锁频后记得 `restore`。
 
-## 输入边界
-
-摄像头仍要求单平面Video Capture、mmap、MJPEG和指定尺寸。程序请求帧率并报告设备协商结果，设备必须支持MJPEG图像节点。断开或流错误时报错退出，不做自动重连。采集实现保留RAII、格式与长度检查及错误诊断；没有为缩短代码删除这些约束。
-
-参考：[NPP滤波API](https://docs.nvidia.com/cuda/archive/12.6.3/npp/image_filtering_functions.html)、[OpenCV滤波API](https://docs.opencv.org/4.x/d4/d86/group__imgproc__filter.html)。用户提供的[Multimedia API示例](https://docs.nvidia.com/jetson/archives/r36.4/ApiReference/l4t_mm_12_v4l2_camera_cuda.html)演示YUV采集、缓冲区共享和画框；本项目保留现有MJPEG输入，使用NPP提供滤波。
