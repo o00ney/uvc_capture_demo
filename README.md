@@ -90,6 +90,18 @@ ssh -N -L 8080:127.0.0.1:8080 jetson
 
 各预热3次，分别顺序测量。输出平均/中位总耗时、CUDA设备与传输时间、含传输及设备阶段的加速比，以及最大误差、MAE、不同字节数、PSNR；可保存`result-cpu.ppm`和`result-cuda.ppm`。这些是库实现的观察值，不能在未检查误差前将加速比解释为已证明等价的算法比较。目前没有实测结果或帧率承诺。
 
+## 开发脚本
+
+在 Mac 上执行，通过 `ssh jetson` 操作设备；`perf_mode.sh` 和 `bench.sh` 需要远端免密 `sudo`。
+
+```bash
+./script/jetson_check.sh [--no-cuda] [--clean]   # 同步后远端 cmake、构建、ctest
+./script/perf_mode.sh lock|restore|status       # jetson_clocks 锁频/恢复；nvpmodel 只报告不切换
+./script/bench.sh [--jpeg input.jpg] [image_benchmark 参数...]
+```
+
+`bench.sh` 同步并构建 `image_benchmark`，不给 JPEG 时用 GStreamer 生成720p测试图（不如真实画面有代表性）。结果连同 `meta.txt`（commit、功耗模式、是否锁频、参数）、`tegrastats.log` 和输出图拉回本地 `build/bench/<时间戳>/`。未锁频时会警告；锁频后记得 `restore`。
+
 ## 输入边界
 
 摄像头仍要求单平面Video Capture、mmap、MJPEG和指定尺寸。程序请求帧率并报告设备协商结果，设备必须支持MJPEG图像节点。断开或流错误时报错退出，不做自动重连。采集实现保留RAII、格式与长度检查及错误诊断；没有为缩短代码删除这些约束。
